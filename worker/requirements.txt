@@ -1,0 +1,21 @@
+# Celery and Redis
+celery==5.3.6
+redis==5.0.1
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# HTTP client
+httpx==0.26.0
+requests==2.31.0
+
+# Image processing
+Pillow==10.2.0
+numpy==1.26.3
+pydicom==2.4.4
+
+# Utilities
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0

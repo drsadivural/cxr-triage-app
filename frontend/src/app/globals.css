@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 249, 250, 251;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(var(--background-end-rgb))
+  )
+  rgb(var(--background-start-rgb));
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Cornerstone viewport */
+.cornerstone-viewport {
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+/* Triage badges */
+.triage-badge {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+}
+
+.triage-badge-urgent {
+  @apply bg-red-100 text-red-800;
+}
+
+.triage-badge-routine {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.triage-badge-normal {
+  @apply bg-green-100 text-green-800;
+}
+
+/* Finding status badges */
+.status-badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+}
+
+.status-positive {
+  @apply bg-red-100 text-red-800;
+}
+
+.status-possible {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-uncertain {
+  @apply bg-orange-100 text-orange-800;
+}
+
+.status-neg {
+  @apply bg-gray-100 text-gray-800;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-4 border-gray-200 border-t-primary-600;
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200;
+}
+
+.card-header {
+  @apply px-4 py-3 border-b border-gray-200;
+}
+
+.card-body {
+  @apply p-4;
+}
+
+/* Disclaimer banner */
+.disclaimer-banner {
+  @apply bg-amber-50 border-l-4 border-amber-400 p-4;
+}
+
+/* Overlay box styles */
+.overlay-box {
+  position: absolute;
+  border: 2px solid;
+  pointer-events: none;
+}
+
+.overlay-box-nodule {
+  border-color: #ef4444;
+}
+
+.overlay-box-mass {
+  border-color: #dc2626;
+}
+
+.overlay-box-pneumothorax {
+  border-color: #f97316;
+}
+
+.overlay-box-effusion {
+  border-color: #3b82f6;
+}
+
+.overlay-box-default {
+  border-color: #22c55e;
+}

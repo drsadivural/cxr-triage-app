@@ -1,0 +1,61 @@
+{
+  "Name": "CXR Triage PACS",
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  "StorageCompression": false,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+  "LuaScripts": [],
+  "Plugins": [],
+  "ConcurrentJobs": 2,
+
+  "HttpServerEnabled": true,
+  "HttpPort": 8042,
+  "HttpDescribeErrors": true,
+  "HttpCompressionEnabled": true,
+  "WebDavEnabled": true,
+  "WebDavDeleteAllowed": false,
+  "WebDavUploadAllowed": true,
+
+  "DicomServerEnabled": true,
+  "DicomAet": "CXR_TRIAGE",
+  "DicomPort": 4242,
+  "DicomCheckCalledAet": false,
+  "DicomCheckModalityHost": false,
+  "DicomScuTimeout": 10,
+
+  "RemoteAccessAllowed": true,
+  "SslEnabled": false,
+  "AuthenticationEnabled": false,
+
+  "DicomModalities": {
+    "sample": ["SAMPLE", "localhost", 4243]
+  },
+
+  "OrthancPeers": {},
+
+  "StableAge": 60,
+  "QueryRetrieveSize": 100,
+  "CaseSensitivePN": false,
+  "LoadPrivateDictionary": true,
+  "Dictionary": {},
+
+  "SynchronousCMove": true,
+  "JobsHistorySize": 10,
+  "SaveJobs": true,
+  "MediaArchiveSize": 1,
+
+  "StorageAccessOnFind": "Always",
+  "MetricsEnabled": true,
+
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Ssl": false,
+    "QidoCaseSensitive": false,
+    "Host": "localhost",
+    "PublicRoot": "/dicom-web/"
+  }
+}
