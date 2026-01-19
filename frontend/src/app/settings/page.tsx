@@ -10,9 +10,70 @@ import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   XCircleIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 type TabType = 'database' | 'llm' | 'ai';
+
+// Default settings for when API fails
+const defaultSettings: Settings = {
+  database: {
+    db_type: 'postgres',
+    host: 'localhost',
+    port: 5432,
+    user: 'cxr_user',
+    password: '',
+    dbname: 'cxr_triage',
+    ssl_mode: 'prefer',
+  },
+  llm: {
+    active_provider: null,
+    llm_rewrite_enabled: false,
+    azure_openai: {
+      enabled: false,
+      endpoint: '',
+      deployment_name: '',
+      api_version: '2024-02-15-preview',
+      api_key: '',
+      temperature: 0.3,
+      top_p: 0.95,
+      max_tokens: 1024,
+      streaming: false,
+    },
+    claude: {
+      enabled: false,
+      base_url: 'https://api.anthropic.com',
+      model: 'claude-3-sonnet-20240229',
+      api_key: '',
+      temperature: 0.3,
+      top_p: 0.95,
+      max_tokens: 1024,
+    },
+    gemini: {
+      enabled: false,
+      base_url: 'https://generativelanguage.googleapis.com/v1beta',
+      model: 'gemini-pro',
+      api_key: '',
+      temperature: 0.3,
+      top_p: 0.95,
+      max_output_tokens: 1024,
+    },
+  },
+  ai: {
+    pneumothorax: { triage_threshold: 0.25, strong_threshold: 0.65, enabled: true },
+    pleural_effusion: { triage_threshold: 0.3, strong_threshold: 0.7, enabled: true },
+    consolidation: { triage_threshold: 0.35, strong_threshold: 0.7, enabled: true },
+    cardiomegaly: { triage_threshold: 0.4, strong_threshold: 0.75, enabled: true },
+    edema: { triage_threshold: 0.35, strong_threshold: 0.7, enabled: true },
+    nodule: { triage_threshold: 0.3, strong_threshold: 0.65, enabled: true },
+    mass: { triage_threshold: 0.25, strong_threshold: 0.6, enabled: true },
+    detector_confidence: 0.25,
+    detector_iou: 0.45,
+    detector_max_boxes: 10,
+    calibration_enabled: true,
+  },
+};
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -21,20 +82,27 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('database');
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'success' | 'error' | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchSettings = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await apiClient.getSettings();
+      setSettings(data);
+    } catch (error: any) {
+      console.error('Failed to fetch settings:', error);
+      const errorMsg = error.message || 'Failed to load settings from server';
+      setLoadError(errorMsg);
+      // Use default settings so user can still configure
+      setSettings(defaultSettings);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const data = await apiClient.getSettings();
-        setSettings(data);
-      } catch (error) {
-        console.error('Failed to fetch settings:', error);
-        toast.error('Failed to load settings');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchSettings();
   }, []);
 
@@ -45,10 +113,11 @@ export default function SettingsPage() {
     try {
       const updated = await apiClient.updateSettings(settings);
       setSettings(updated);
+      setLoadError(null);
       toast.success('Settings saved successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save settings:', error);
-      toast.error('Failed to save settings');
+      toast.error(error.message || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -67,9 +136,9 @@ export default function SettingsPage() {
       } else {
         toast.error(result.message || 'Connection failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       setConnectionStatus('error');
-      toast.error('Connection test failed');
+      toast.error(error.message || 'Connection test failed');
     } finally {
       setTestingConnection(false);
     }
@@ -89,8 +158,16 @@ export default function SettingsPage() {
       ...settings,
       llm: {
         ...settings.llm,
-        [provider]: { ...settings.llm[provider as keyof typeof settings.llm], [field]: value },
+        [provider]: { ...(settings.llm as any)[provider], [field]: value },
       },
+    });
+  };
+
+  const updateLLMRoot = (field: string, value: any) => {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      llm: { ...settings.llm, [field]: value },
     });
   };
 
@@ -102,7 +179,7 @@ export default function SettingsPage() {
     });
   };
 
-  const updateFindingThreshold = (finding: string, field: string, value: number) => {
+  const updateFindingThreshold = (finding: string, field: string, value: number | boolean) => {
     if (!settings) return;
     setSettings({
       ...settings,
@@ -119,7 +196,10 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-12 h-12 spinner" />
+        <div className="text-center">
+          <div className="w-12 h-12 spinner mx-auto mb-4" />
+          <p className="text-gray-500">Loading settings...</p>
+        </div>
       </div>
     );
   }
@@ -127,7 +207,16 @@ export default function SettingsPage() {
   if (!settings) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Failed to load settings</p>
+        <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <p className="text-gray-700 font-medium">Failed to load settings</p>
+        <p className="text-gray-500 text-sm mt-2">{loadError || 'Unknown error'}</p>
+        <button
+          onClick={fetchSettings}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-flex items-center"
+        >
+          <ArrowPathIcon className="w-4 h-4 mr-2" />
+          Retry
+        </button>
       </div>
     );
   }
@@ -138,18 +227,51 @@ export default function SettingsPage() {
     { id: 'ai', name: 'AI Settings', icon: CpuChipIcon },
   ];
 
+  const findings = [
+    { key: 'pneumothorax', label: 'Pneumothorax' },
+    { key: 'pleural_effusion', label: 'Pleural Effusion' },
+    { key: 'consolidation', label: 'Consolidation' },
+    { key: 'cardiomegaly', label: 'Cardiomegaly' },
+    { key: 'edema', label: 'Edema' },
+    { key: 'nodule', label: 'Nodule' },
+    { key: 'mass', label: 'Mass' },
+  ];
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
+        <div className="flex items-center space-x-2">
+          {loadError && (
+            <span className="text-sm text-yellow-600 flex items-center mr-4">
+              <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+              Using defaults
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
       </div>
+
+      {loadError && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="w-5 h-5 text-yellow-500 mt-0.5 mr-3" />
+            <div>
+              <p className="text-sm text-yellow-800 font-medium">Could not load saved settings</p>
+              <p className="text-sm text-yellow-700 mt-1">{loadError}</p>
+              <p className="text-sm text-yellow-600 mt-2">
+                Default settings are shown. Configure and save to persist your settings.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -211,7 +333,7 @@ export default function SettingsPage() {
                 <input
                   type="number"
                   value={settings.database.port}
-                  onChange={(e) => updateDatabase('port', parseInt(e.target.value))}
+                  onChange={(e) => updateDatabase('port', parseInt(e.target.value) || 5432)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
@@ -245,6 +367,7 @@ export default function SettingsPage() {
                   type="password"
                   value={settings.database.password}
                   onChange={(e) => updateDatabase('password', e.target.value)}
+                  placeholder={settings.database.password === '********' ? '(unchanged)' : ''}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
@@ -298,61 +421,60 @@ export default function SettingsPage() {
               <h3 className="font-semibold text-gray-900">LLM Configuration</h3>
             </div>
             <div className="card-body space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Enable LLM Report Rewriting
+                  </label>
+                  <p className="text-sm text-gray-500">
+                    Use AI to enhance and rewrite generated reports
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.llm.llm_rewrite_enabled}
+                    onChange={(e) => updateLLMRoot('llm_rewrite_enabled', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Active Provider
                 </label>
                 <select
                   value={settings.llm.active_provider || ''}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      llm: { ...settings.llm, active_provider: e.target.value || null },
-                    })
-                  }
+                  onChange={(e) => updateLLMRoot('active_provider', e.target.value || null)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  disabled={!settings.llm.llm_rewrite_enabled}
                 >
-                  <option value="">None (Template Only)</option>
+                  <option value="">None</option>
                   <option value="azure_openai">Azure OpenAI</option>
-                  <option value="claude">Claude</option>
-                  <option value="gemini">Gemini</option>
+                  <option value="claude">Claude (Anthropic)</option>
+                  <option value="gemini">Google Gemini</option>
                 </select>
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="llm_rewrite"
-                  checked={settings.llm.llm_rewrite_enabled}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      llm: { ...settings.llm, llm_rewrite_enabled: e.target.checked },
-                    })
-                  }
-                  className="h-4 w-4 text-primary-600 rounded"
-                />
-                <label htmlFor="llm_rewrite" className="ml-2 text-sm text-gray-700">
-                  Enable LLM Report Rewriting
-                </label>
               </div>
             </div>
           </div>
 
           {/* Azure OpenAI */}
           <div className="card">
-            <div className="card-header">
+            <div className="card-header flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Azure OpenAI</h3>
-            </div>
-            <div className="card-body space-y-4">
-              <div className="flex items-center">
+              <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
                   checked={settings.llm.azure_openai.enabled}
                   onChange={(e) => updateLLM('azure_openai', 'enabled', e.target.checked)}
-                  className="h-4 w-4 text-primary-600 rounded"
+                  className="sr-only peer"
                 />
-                <label className="ml-2 text-sm text-gray-700">Enabled</label>
-              </div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              </label>
+            </div>
+            <div className="card-body space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -379,17 +501,6 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    API Version
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.llm.azure_openai.api_version}
-                    onChange={(e) => updateLLM('azure_openai', 'api_version', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     API Key
                   </label>
                   <input
@@ -401,16 +512,27 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Temperature
+                    API Version
                   </label>
                   <input
-                    type="number"
-                    step="0.1"
+                    type="text"
+                    value={settings.llm.azure_openai.api_version}
+                    onChange={(e) => updateLLM('azure_openai', 'api_version', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Temperature ({settings.llm.azure_openai.temperature})
+                  </label>
+                  <input
+                    type="range"
                     min="0"
-                    max="2"
+                    max="1"
+                    step="0.1"
                     value={settings.llm.azure_openai.temperature}
                     onChange={(e) => updateLLM('azure_openai', 'temperature', parseFloat(e.target.value))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -420,7 +542,7 @@ export default function SettingsPage() {
                   <input
                     type="number"
                     value={settings.llm.azure_openai.max_tokens}
-                    onChange={(e) => updateLLM('azure_openai', 'max_tokens', parseInt(e.target.value))}
+                    onChange={(e) => updateLLM('azure_openai', 'max_tokens', parseInt(e.target.value) || 1024)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
@@ -430,30 +552,33 @@ export default function SettingsPage() {
 
           {/* Claude */}
           <div className="card">
-            <div className="card-header">
+            <div className="card-header flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Claude (Anthropic)</h3>
-            </div>
-            <div className="card-body space-y-4">
-              <div className="flex items-center">
+              <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
                   checked={settings.llm.claude.enabled}
                   onChange={(e) => updateLLM('claude', 'enabled', e.target.checked)}
-                  className="h-4 w-4 text-primary-600 rounded"
+                  className="sr-only peer"
                 />
-                <label className="ml-2 text-sm text-gray-700">Enabled</label>
-              </div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              </label>
+            </div>
+            <div className="card-body space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Model
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={settings.llm.claude.model}
                     onChange={(e) => updateLLM('claude', 'model', e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  />
+                  >
+                    <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                    <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                    <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -466,36 +591,64 @@ export default function SettingsPage() {
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Temperature ({settings.llm.claude.temperature})
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={settings.llm.claude.temperature}
+                    onChange={(e) => updateLLM('claude', 'temperature', parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Tokens
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.llm.claude.max_tokens}
+                    onChange={(e) => updateLLM('claude', 'max_tokens', parseInt(e.target.value) || 1024)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Gemini */}
           <div className="card">
-            <div className="card-header">
+            <div className="card-header flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Google Gemini</h3>
-            </div>
-            <div className="card-body space-y-4">
-              <div className="flex items-center">
+              <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
                   checked={settings.llm.gemini.enabled}
                   onChange={(e) => updateLLM('gemini', 'enabled', e.target.checked)}
-                  className="h-4 w-4 text-primary-600 rounded"
+                  className="sr-only peer"
                 />
-                <label className="ml-2 text-sm text-gray-700">Enabled</label>
-              </div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              </label>
+            </div>
+            <div className="card-body space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Model
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={settings.llm.gemini.model}
                     onChange={(e) => updateLLM('gemini', 'model', e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  />
+                  >
+                    <option value="gemini-pro">Gemini Pro</option>
+                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -505,6 +658,31 @@ export default function SettingsPage() {
                     type="password"
                     value={settings.llm.gemini.api_key}
                     onChange={(e) => updateLLM('gemini', 'api_key', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Temperature ({settings.llm.gemini.temperature})
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={settings.llm.gemini.temperature}
+                    onChange={(e) => updateLLM('gemini', 'temperature', parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Output Tokens
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.llm.gemini.max_output_tokens}
+                    onChange={(e) => updateLLM('gemini', 'max_output_tokens', parseInt(e.target.value) || 1024)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
@@ -522,34 +700,34 @@ export default function SettingsPage() {
             <div className="card-header">
               <h3 className="font-semibold text-gray-900">Detector Settings</h3>
             </div>
-            <div className="card-body">
+            <div className="card-body space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confidence Threshold
+                    Confidence Threshold ({settings.ai.detector_confidence})
                   </label>
                   <input
-                    type="number"
+                    type="range"
+                    min="0.1"
+                    max="0.9"
                     step="0.05"
-                    min="0"
-                    max="1"
                     value={settings.ai.detector_confidence}
                     onChange={(e) => updateAI('detector_confidence', parseFloat(e.target.value))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    IoU Threshold
+                    IoU Threshold ({settings.ai.detector_iou})
                   </label>
                   <input
-                    type="number"
+                    type="range"
+                    min="0.1"
+                    max="0.9"
                     step="0.05"
-                    min="0"
-                    max="1"
                     value={settings.ai.detector_iou}
                     onChange={(e) => updateAI('detector_iou', parseFloat(e.target.value))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -561,99 +739,91 @@ export default function SettingsPage() {
                     min="1"
                     max="50"
                     value={settings.ai.detector_max_boxes}
-                    onChange={(e) => updateAI('detector_max_boxes', parseInt(e.target.value))}
+                    onChange={(e) => updateAI('detector_max_boxes', parseInt(e.target.value) || 10)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
               </div>
-              <div className="mt-4">
-                <label className="flex items-center">
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Probability Calibration
+                  </label>
+                  <p className="text-sm text-gray-500">
+                    Apply calibration to model probabilities
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={settings.ai.calibration_enabled}
                     onChange={(e) => updateAI('calibration_enabled', e.target.checked)}
-                    className="h-4 w-4 text-primary-600 rounded"
+                    className="sr-only peer"
                   />
-                  <span className="ml-2 text-sm text-gray-700">
-                    Enable Probability Calibration
-                  </span>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                 </label>
               </div>
             </div>
           </div>
 
-          {/* Per-Finding Thresholds */}
+          {/* Finding Thresholds */}
           <div className="card">
             <div className="card-header">
               <h3 className="font-semibold text-gray-900">Finding Thresholds</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Configure triage and strong positive thresholds for each finding
+              </p>
             </div>
             <div className="card-body">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Finding
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Triage Threshold
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Strong Threshold
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Enabled
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {['pneumothorax', 'pleural_effusion', 'consolidation', 'cardiomegaly', 'edema', 'nodule', 'mass'].map(
-                      (finding) => (
-                        <tr key={finding}>
-                          <td className="px-4 py-2 capitalize">
-                            {finding.replace('_', ' ')}
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              step="0.05"
-                              min="0"
-                              max="1"
-                              value={(settings.ai as any)[finding]?.triage_threshold || 0.3}
-                              onChange={(e) =>
-                                updateFindingThreshold(finding, 'triage_threshold', parseFloat(e.target.value))
-                              }
-                              className="w-20 border border-gray-300 rounded px-2 py-1 text-sm"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              step="0.05"
-                              min="0"
-                              max="1"
-                              value={(settings.ai as any)[finding]?.strong_threshold || 0.7}
-                              onChange={(e) =>
-                                updateFindingThreshold(finding, 'strong_threshold', parseFloat(e.target.value))
-                              }
-                              className="w-20 border border-gray-300 rounded px-2 py-1 text-sm"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="checkbox"
-                              checked={(settings.ai as any)[finding]?.enabled !== false}
-                              onChange={(e) =>
-                                updateFindingThreshold(finding, 'enabled', e.target.checked ? 1 : 0)
-                              }
-                              className="h-4 w-4 text-primary-600 rounded"
-                            />
-                          </td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
+              <div className="space-y-6">
+                {findings.map((finding) => (
+                  <div key={finding.key} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-900">{finding.label}</span>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(settings.ai as any)[finding.key]?.enabled ?? true}
+                          onChange={(e) => updateFindingThreshold(finding.key, 'enabled', e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Triage Threshold ({((settings.ai as any)[finding.key]?.triage_threshold ?? 0.3).toFixed(2)})
+                        </label>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="0.9"
+                          step="0.05"
+                          value={(settings.ai as any)[finding.key]?.triage_threshold ?? 0.3}
+                          onChange={(e) => updateFindingThreshold(finding.key, 'triage_threshold', parseFloat(e.target.value))}
+                          className="w-full"
+                          disabled={!((settings.ai as any)[finding.key]?.enabled ?? true)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Strong Threshold ({((settings.ai as any)[finding.key]?.strong_threshold ?? 0.7).toFixed(2)})
+                        </label>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="0.9"
+                          step="0.05"
+                          value={(settings.ai as any)[finding.key]?.strong_threshold ?? 0.7}
+                          onChange={(e) => updateFindingThreshold(finding.key, 'strong_threshold', parseFloat(e.target.value))}
+                          className="w-full"
+                          disabled={!((settings.ai as any)[finding.key]?.enabled ?? true)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

@@ -525,25 +525,34 @@ async def get_study(study_id: UUID, db: AsyncSession = Depends(get_db)):
 @app.get("/v1/settings", response_model=SettingsResponse)
 async def get_settings(db: AsyncSession = Depends(get_db)):
     """Get application settings (admin only)."""
-    app_settings = await load_app_settings(db)
-    
-    # Mask sensitive data
-    response = SettingsResponse(
-        database=app_settings.database,
-        llm=app_settings.llm,
-        ai=app_settings.ai
-    )
-    
-    # Mask passwords and API keys
-    response.database.password = "********" if response.database.password else ""
-    if response.llm.azure_openai.api_key:
-        response.llm.azure_openai.api_key = "********"
-    if response.llm.claude.api_key:
-        response.llm.claude.api_key = "********"
-    if response.llm.gemini.api_key:
-        response.llm.gemini.api_key = "********"
-    
-    return response
+    try:
+        app_settings = await load_app_settings(db)
+        
+        # Create a copy for the response to avoid modifying the original
+        from app.config import DatabaseSettings, LLMSettings, AISettings
+        
+        # Create response with copies of settings
+        response = SettingsResponse(
+            database=DatabaseSettings(**app_settings.database.model_dump()),
+            llm=LLMSettings(**app_settings.llm.model_dump()),
+            ai=AISettings(**app_settings.ai.model_dump())
+        )
+        
+        # Mask passwords and API keys
+        response.database.password = "********" if app_settings.database.password else ""
+        if app_settings.llm.azure_openai.api_key:
+            response.llm.azure_openai.api_key = "********"
+        if app_settings.llm.claude.api_key:
+            response.llm.claude.api_key = "********"
+        if app_settings.llm.gemini.api_key:
+            response.llm.gemini.api_key = "********"
+        
+        return response
+    except Exception as e:
+        print(f"Error getting settings: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load settings: {str(e)}")
 
 
 @app.put("/v1/settings", response_model=SettingsResponse)

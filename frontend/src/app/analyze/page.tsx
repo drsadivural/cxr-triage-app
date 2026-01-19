@@ -171,7 +171,7 @@ export default function AnalyzePage() {
                   <h3 className="font-semibold text-red-800">Analysis Failed</h3>
                   <p className="text-sm text-red-600 mt-1">{error}</p>
                   
-                  {error.includes('Inference service') && (
+                  {error.toLowerCase().includes('inference') && (
                     <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                       <p className="text-sm text-yellow-800">
                         <strong>Tip:</strong> The inference service needs to be running for analysis. 
@@ -183,7 +183,7 @@ export default function AnalyzePage() {
                     </div>
                   )}
                   
-                  {error.includes('Cannot connect') && (
+                  {error.toLowerCase().includes('connect') && (
                     <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                       <p className="text-sm text-yellow-800">
                         <strong>Tip:</strong> Cannot connect to the backend server. 
