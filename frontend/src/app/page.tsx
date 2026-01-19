@@ -183,7 +183,7 @@ export default function DashboardPage() {
             <h3 className="font-semibold text-gray-900">Triage Distribution</h3>
           </div>
           <div className="card-body">
-            {triageChartData && metrics?.triage_distribution.total > 0 ? (
+            {triageChartData && (metrics?.triage_distribution?.total ?? 0) > 0 ? (
               <div className="h-64 flex items-center justify-center">
                 <Doughnut
                   data={triageChartData}
