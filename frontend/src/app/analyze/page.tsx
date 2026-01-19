@@ -11,6 +11,7 @@ import {
   DocumentTextIcon,
   PhotoIcon,
   DocumentIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 
 export default function AnalyzePage() {
@@ -19,10 +20,12 @@ export default function AnalyzePage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
     setFile(selectedFile);
     setResult(null);
+    setError(null);
     setIsAnalyzing(true);
 
     // Create preview URL
@@ -40,9 +43,11 @@ export default function AnalyzePage() {
       } else if (response.status === 'queued') {
         toast.success('Analysis queued. Check worklist for results.');
       }
-    } catch (error: any) {
-      console.error('Analysis failed:', error);
-      toast.error(error.response?.data?.detail || 'Analysis failed');
+    } catch (err: any) {
+      console.error('Analysis failed:', err);
+      const errorMessage = err.message || 'Analysis failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsAnalyzing(false);
     }
@@ -64,7 +69,7 @@ export default function AnalyzePage() {
       }
 
       toast.success(`Exported as ${format.toUpperCase()}`);
-    } catch (error) {
+    } catch (err) {
       toast.error('Export failed');
     }
   };
@@ -78,6 +83,12 @@ export default function AnalyzePage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleRetry = () => {
+    if (file) {
+      handleFileSelect(file);
+    }
   };
 
   return (
@@ -151,6 +162,44 @@ export default function AnalyzePage() {
               <p className="text-sm text-gray-400 mt-2">
                 This may take a few seconds
               </p>
+            </div>
+          ) : error ? (
+            <div className="card p-6">
+              <div className="flex items-start space-x-3">
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-red-800">Analysis Failed</h3>
+                  <p className="text-sm text-red-600 mt-1">{error}</p>
+                  
+                  {error.includes('Inference service') && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-sm text-yellow-800">
+                        <strong>Tip:</strong> The inference service needs to be running for analysis. 
+                        Make sure all Docker containers are started with:
+                      </p>
+                      <code className="block mt-2 text-xs bg-yellow-100 p-2 rounded">
+                        docker-compose up -d
+                      </code>
+                    </div>
+                  )}
+                  
+                  {error.includes('Cannot connect') && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-sm text-yellow-800">
+                        <strong>Tip:</strong> Cannot connect to the backend server. 
+                        Please ensure the backend is running on the correct port.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={handleRetry}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                  >
+                    Retry Analysis
+                  </button>
+                </div>
+              </div>
             </div>
           ) : result ? (
             <FindingsPanel

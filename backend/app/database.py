@@ -4,7 +4,7 @@ Database connection and session management.
 import os
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings, AppSettings, get_secret_manager
@@ -102,7 +102,7 @@ async def test_connection() -> bool:
         if async_engine is None:
             init_database()
         async with async_engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
         print(f"Database connection test failed: {e}")
@@ -114,19 +114,23 @@ async def load_app_settings(db: AsyncSession) -> AppSettings:
     """Load application settings from database."""
     from sqlalchemy import select
     
-    result = await db.execute(
-        select(AppConfig).where(AppConfig.config_key == "app_settings")
-    )
-    config = result.scalar_one_or_none()
-    
-    if config is None:
-        return AppSettings()
-    
     try:
-        secret_manager = get_secret_manager()
-        return secret_manager.decrypt_settings(config.encrypted_value)
+        result = await db.execute(
+            select(AppConfig).where(AppConfig.config_key == "app_settings")
+        )
+        config = result.scalar_one_or_none()
+        
+        if config is None:
+            return AppSettings()
+        
+        try:
+            secret_manager = get_secret_manager()
+            return secret_manager.decrypt_settings(config.encrypted_value)
+        except Exception as e:
+            print(f"Failed to decrypt settings: {e}")
+            return AppSettings()
     except Exception as e:
-        print(f"Failed to decrypt settings: {e}")
+        print(f"Failed to load settings from database: {e}")
         return AppSettings()
 
 

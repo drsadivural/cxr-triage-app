@@ -24,6 +24,8 @@ class InferenceClient:
                 response = await client.get(f"{self.base_url}/health")
                 response.raise_for_status()
                 return response.json()
+            except httpx.ConnectError:
+                return {"status": "unavailable", "error": "Cannot connect to inference service"}
             except Exception as e:
                 return {"status": "unhealthy", "error": str(e)}
     
@@ -34,6 +36,8 @@ class InferenceClient:
                 response = await client.get(f"{self.base_url}/models")
                 response.raise_for_status()
                 return response.json()
+            except httpx.ConnectError:
+                return {"error": "Cannot connect to inference service", "models_available": False}
             except Exception as e:
                 return {"error": str(e), "models_available": False}
     
@@ -59,28 +63,35 @@ class InferenceClient:
             Dictionary containing findings and bounding boxes
         """
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # Read image file
-            with open(image_path, "rb") as f:
-                image_data = f.read()
-            
-            # Prepare multipart form data
-            files = {
-                "file": (Path(image_path).name, image_data, "image/png")
-            }
-            data = {
-                "detector_conf": str(detector_conf),
-                "detector_iou": str(detector_iou),
-                "detector_max_boxes": str(detector_max_boxes),
-                "calibration_enabled": str(calibration_enabled).lower()
-            }
-            
-            response = await client.post(
-                f"{self.base_url}/analyze",
-                files=files,
-                data=data
-            )
-            response.raise_for_status()
-            return response.json()
+            try:
+                # Read image file
+                with open(image_path, "rb") as f:
+                    image_data = f.read()
+                
+                # Prepare multipart form data
+                files = {
+                    "file": (Path(image_path).name, image_data, "image/png")
+                }
+                data = {
+                    "detector_conf": str(detector_conf),
+                    "detector_iou": str(detector_iou),
+                    "detector_max_boxes": str(detector_max_boxes),
+                    "calibration_enabled": str(calibration_enabled).lower()
+                }
+                
+                response = await client.post(
+                    f"{self.base_url}/analyze",
+                    files=files,
+                    data=data
+                )
+                response.raise_for_status()
+                return response.json()
+            except httpx.ConnectError as e:
+                raise ConnectionError(f"Cannot connect to inference service at {self.base_url}: {e}")
+            except httpx.HTTPStatusError as e:
+                raise RuntimeError(f"Inference service error: {e.response.status_code} - {e.response.text}")
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Image file not found: {image_path}")
     
     async def analyze_image_bytes(
         self,
@@ -95,23 +106,28 @@ class InferenceClient:
         Send image bytes to inference service for analysis.
         """
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            files = {
-                "file": (filename, image_bytes, "image/png")
-            }
-            data = {
-                "detector_conf": str(detector_conf),
-                "detector_iou": str(detector_iou),
-                "detector_max_boxes": str(detector_max_boxes),
-                "calibration_enabled": str(calibration_enabled).lower()
-            }
-            
-            response = await client.post(
-                f"{self.base_url}/analyze",
-                files=files,
-                data=data
-            )
-            response.raise_for_status()
-            return response.json()
+            try:
+                files = {
+                    "file": (filename, image_bytes, "image/png")
+                }
+                data = {
+                    "detector_conf": str(detector_conf),
+                    "detector_iou": str(detector_iou),
+                    "detector_max_boxes": str(detector_max_boxes),
+                    "calibration_enabled": str(calibration_enabled).lower()
+                }
+                
+                response = await client.post(
+                    f"{self.base_url}/analyze",
+                    files=files,
+                    data=data
+                )
+                response.raise_for_status()
+                return response.json()
+            except httpx.ConnectError as e:
+                raise ConnectionError(f"Cannot connect to inference service: {e}")
+            except httpx.HTTPStatusError as e:
+                raise RuntimeError(f"Inference service error: {e.response.status_code}")
     
     def parse_findings(self, response: Dict[str, Any], ai_settings) -> List[FindingResult]:
         """Parse findings from inference response."""
@@ -171,6 +187,13 @@ class InferenceClient:
         return boxes
 
 
+# Singleton instance
+_inference_client: Optional[InferenceClient] = None
+
+
 def get_inference_client() -> InferenceClient:
     """Factory function to create inference client."""
-    return InferenceClient()
+    global _inference_client
+    if _inference_client is None:
+        _inference_client = InferenceClient()
+    return _inference_client

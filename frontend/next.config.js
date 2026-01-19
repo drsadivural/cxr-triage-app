@@ -15,6 +15,25 @@ const nextConfig = {
     ];
   },
   
+  // Image configuration
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '8000',
+        pathname: '/v1/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'backend',
+        port: '8000',
+        pathname: '/v1/**',
+      },
+    ],
+    unoptimized: true,
+  },
+  
   // Webpack configuration for Cornerstone.js
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -22,6 +41,7 @@ const nextConfig = {
         ...config.resolve.fallback,
         fs: false,
         path: false,
+        crypto: false,
       };
     }
     

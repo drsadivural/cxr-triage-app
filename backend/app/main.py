@@ -297,14 +297,39 @@ async def analyze_cxr(
             result=result
         )
         
-    except Exception as e:
+    except ConnectionError as e:
+        # Inference service not available
+        study.status = "failed"
+        study.error_message = f"Inference service unavailable: {str(e)}"
+        await db.commit()
+        
+        await audit_service.log_analysis_error(study.id, str(e), client_ip)
+        
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Inference service unavailable. Please ensure the inference service is running. Error: {str(e)}"
+        )
+    except FileNotFoundError as e:
         study.status = "failed"
         study.error_message = str(e)
         await db.commit()
         
         await audit_service.log_analysis_error(study.id, str(e), client_ip)
         
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
+    except Exception as e:
+        import traceback
+        error_detail = f"{type(e).__name__}: {str(e)}"
+        print(f"Analysis error: {error_detail}")
+        print(traceback.format_exc())
+        
+        study.status = "failed"
+        study.error_message = error_detail
+        await db.commit()
+        
+        await audit_service.log_analysis_error(study.id, error_detail, client_ip)
+        
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get("/v1/cxr/result/{study_id}", response_model=AnalysisResult)
