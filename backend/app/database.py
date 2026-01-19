@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 
 from app.config import settings, AppSettings, get_secret_manager
 from app.models import Base, AppConfig

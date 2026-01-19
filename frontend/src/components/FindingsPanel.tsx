@@ -71,11 +71,14 @@ export default function FindingsPanel({
   modelInfo,
 }: FindingsPanelProps) {
   // Sort findings by probability (highest first)
-  const sortedFindings = [...findings].sort(
-    (a, b) =>
-      (b.calibrated_probability || b.probability) -
-      (a.calibrated_probability || a.probability)
-  );
+const safeFindings = (findings ?? []).filter((f): f is Finding => !!f);
+
+const prob = (f: Finding) =>
+  (typeof f.calibrated_probability === "number" ? f.calibrated_probability : undefined) ??
+  (typeof f.probability === "number" ? f.probability : undefined) ??
+  0;
+
+const sortedFindings = [...safeFindings].sort((a, b) => prob(b) - prob(a));
 
   return (
     <div className="space-y-4">
@@ -132,7 +135,12 @@ export default function FindingsPanel({
               {sortedFindings.map((finding, idx) => {
                 const config = statusConfig[finding.status];
                 const Icon = config.icon;
-                const prob = finding.calibrated_probability || finding.probability;
+		const prob =
+		  (typeof finding.calibrated_probability === "number"
+		    ? finding.calibrated_probability
+		    : undefined) ??
+		  (typeof finding.probability === "number" ? finding.probability : undefined) ??
+		  0;
 
                 return (
                   <tr key={idx} className="hover:bg-gray-50">
